@@ -10,10 +10,10 @@ import (
 )
 
 type PowerUser struct {
-	ConfigPath          string              `yaml:"configPath"`
-	PackagesCataloger   PackageCataloger    `yaml:"packageCataloger" mapstructure:"packageCataloger"`
-	FileMetadataIndexer FileMetadataIndexer `yaml:"fileMetadataIndexer" mapstructure:"fileMetadataIndexer"`
-	FileDigestsIndexer  FileDigestsIndexer  `yaml:"fileDigestsIndexer" mapstructure:"fileDigestsIndexer"`
+	ConfigPath          string              `yaml:"configPath,omitempty" json:"configPath"`
+	PackagesCataloger   PackageCataloger    `yaml:"packageCataloger" json:"packageCataloger" mapstructure:"packageCataloger"`
+	FileMetadataIndexer FileMetadataIndexer `yaml:"fileMetadataIndexer" json:"fileMetadataIndexer" mapstructure:"fileMetadataIndexer"`
+	FileDigestsIndexer  FileDigestsIndexer  `yaml:"fileDigestsIndexer" json:"fileDigestsIndexer" mapstructure:"fileDigestsIndexer"`
 }
 
 // LoadPowerUserConfig populates the given viper object with PowerUser configuration  on disk

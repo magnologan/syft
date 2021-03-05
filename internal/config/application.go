@@ -17,17 +17,17 @@ import (
 
 // Application is the main syft application configuration.
 type Application struct {
-	ConfigPath        string                   `yaml:",omitempty"`                   // the location where the application config was read from (either from -c or discovered while loading)
-	PresenterOpt      packages.PresenterOption `yaml:"-"`                            // -o, the native Presenter.PresenterOption to use for report formatting
-	Output            string                   `yaml:"output" mapstructure:"output"` // -o, the Presenter hint string to use for report formatting
-	ScopeOpt          source.Scope             `yaml:"-"`                            // -s, the native source.Scope option to use for how to catalog the container image
-	Scope             string                   `yaml:"scope" mapstructure:"scope"`   // -s, the source.Scope string hint for how to catalog the container image
-	Quiet             bool                     `yaml:"quiet" mapstructure:"quiet"`   // -q, indicates to not show any status output to stderr (ETUI or logging UI)
-	Log               logging                  `yaml:"log"  mapstructure:"log"`      // all logging-related options
-	CliOptions        CliOnlyOptions           `yaml:"-"`                            // all options only available through the CLI (not via env vars or config)
-	Dev               Development              `mapstructure:"dev"`
-	CheckForAppUpdate bool                     `yaml:"check-for-app-update" mapstructure:"check-for-app-update"` // whether to check for an application update on start up or not
-	Anchore           anchore                  `yaml:"anchore" mapstructure:"anchore"`                           // options for interacting with Anchore Engine/Enterprise
+	ConfigPath        string                   `yaml:",omitempty" json:"configPath"`               // the location where the application config was read from (either from -c or discovered while loading)
+	PresenterOpt      packages.PresenterOption `yaml:"-" json:"-"`                                 // -o, the native Presenter.PresenterOption to use for report formatting
+	Output            string                   `yaml:"output" json:"output" mapstructure:"output"` // -o, the Presenter hint string to use for report formatting
+	ScopeOpt          source.Scope             `yaml:"-" json:"-"`                                 // -s, the native source.Scope option to use for how to catalog the container image
+	Scope             string                   `yaml:"scope" json:"scope" mapstructure:"scope"`    // -s, the source.Scope string hint for how to catalog the container image
+	Quiet             bool                     `yaml:"quiet" json:"quiet" mapstructure:"quiet"`    // -q, indicates to not show any status output to stderr (ETUI or logging UI)
+	Log               logging                  `yaml:"log" json:"log" mapstructure:"log"`          // all logging-related options
+	CliOptions        CliOnlyOptions           `yaml:"-" json:"-"`                                 // all options only available through the CLI (not via env vars or config)
+	Dev               Development              `yaml:"dev" json:"dev" mapstructure:"dev"`
+	CheckForAppUpdate bool                     `yaml:"check-for-app-update" json:"check-for-app-update" mapstructure:"check-for-app-update"` // whether to check for an application update on start up or not
+	Anchore           anchore                  `yaml:"anchore" json:"anchore" mapstructure:"anchore"`                                        // options for interacting with Anchore Engine/Enterprise
 }
 
 // CliOnlyOptions are options that are in the application config in memory, but are only exposed via CLI switches (not from unmarshaling a config file)
@@ -38,26 +38,28 @@ type CliOnlyOptions struct {
 
 // logging contains all logging-related configuration options available to the user via the application config.
 type logging struct {
-	Structured   bool         `yaml:"structured" mapstructure:"structured"` // show all log entries as JSON formatted strings
-	LevelOpt     logrus.Level `yaml:"level"`                                // the native log level object used by the logger
-	Level        string       `yaml:"-" mapstructure:"level"`               // the log level string hint
-	FileLocation string       `yaml:"file" mapstructure:"file"`             // the file path to write logs to
+	Structured   bool         `yaml:"structured" json:"structured" mapstructure:"structured"` // show all log entries as JSON formatted strings
+	LevelOpt     logrus.Level `yaml:"-" json:"-"`                                             // the native log level object used by the logger
+	Level        string       `yaml:"level" json:"level" mapstructure:"level"`                // the log level string hint
+	FileLocation string       `yaml:"file" json:"file-location" mapstructure:"file"`          // the file path to write logs to
 }
 
 type anchore struct {
 	// upload options
-	UploadEnabled          bool   `yaml:"upload-enabled"  mapstructure:"upload-enabled"`                    // whether to upload results to Anchore Engine/Enterprise (defaults to "false" unless there is the presence of -h CLI option)
-	Host                   string `yaml:"host" mapstructure:"host"`                                         // -H , hostname of the engine/enterprise instance to upload to
-	Path                   string `yaml:"path" mapstructure:"path"`                                         // override the engine/enterprise API upload path
-	Username               string `yaml:"username" mapstructure:"username"`                                 // -u , username to authenticate upload
-	Password               string `yaml:"password" mapstructure:"password"`                                 // -p , password to authenticate upload
-	Dockerfile             string `yaml:"dockerfile" mapstructure:"dockerfile"`                             // -d , dockerfile to attach for upload
-	OverwriteExistingImage bool   `yaml:"overwrite-existing-image" mapstructure:"overwrite-existing-image"` // --overwrite-existing-image , if any of the SBOM components have already been uploaded this flag will ensure they are overwritten with the current upload
+	UploadEnabled bool   `yaml:"upload-enabled" json:"upload-enabled" mapstructure:"upload-enabled"` // whether to upload results to Anchore Engine/Enterprise (defaults to "false" unless there is the presence of -h CLI option)
+	Host          string `yaml:"host" json:"host" mapstructure:"host"`                               // -H , hostname of the engine/enterprise instance to upload to
+	Path          string `yaml:"path" json:"path" mapstructure:"path"`                               // override the engine/enterprise API upload path
+	// IMPORTANT: do not show the username in any YAML/JSON output (sensitive information)
+	Username string `yaml:"-" json:"-" mapstructure:"username"` // -u , username to authenticate upload
+	// IMPORTANT: do not show the password in any YAML/JSON output (sensitive information)
+	Password               string `yaml:"-" json:"-" mapstructure:"password"`                                                               // -p , password to authenticate upload
+	Dockerfile             string `yaml:"dockerfile" json:"dockerfile" mapstructure:"dockerfile"`                                           // -d , dockerfile to attach for upload
+	OverwriteExistingImage bool   `yaml:"overwrite-existing-image" json:"overwrite-existing-image" mapstructure:"overwrite-existing-image"` // --overwrite-existing-image , if any of the SBOM components have already been uploaded this flag will ensure they are overwritten with the current upload
 }
 
 type Development struct {
-	ProfileCPU bool `mapstructure:"profile-cpu"`
-	ProfileMem bool `mapstructure:"profile-mem"`
+	ProfileCPU bool `yaml:"profile-cpu" json:"profile-cpu" mapstructure:"profile-cpu"`
+	ProfileMem bool `yaml:"profile-mem" json:"profile-mem" mapstructure:"profile-mem"`
 }
 
 // LoadApplicationConfig populates the given viper object with application configuration discovered on disk
@@ -141,15 +143,6 @@ func (cfg *Application) build(v *viper.Viper, wasHostnameSet bool) error {
 }
 
 func (cfg Application) String() string {
-	// redact sensitive information
-	if cfg.Anchore.Username != "" {
-		cfg.Anchore.Username = "********"
-	}
-
-	if cfg.Anchore.Password != "" {
-		cfg.Anchore.Password = "********"
-	}
-
 	// yaml is pretty human friendly (at least when compared to json)
 	appCfgStr, err := yaml.Marshal(&cfg)
 

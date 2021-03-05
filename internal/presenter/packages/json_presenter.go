@@ -29,7 +29,8 @@ func NewJsonPresenter(catalog *pkg.Catalog, s source.Metadata, d *distro.Distro,
 
 // Present the catalog results to the given writer.
 func (pres *JsonPresenter) Present(output io.Writer) error {
-	doc, err := NewJsonDocument(pres.catalog, pres.srcMetadata, pres.distro, pres.scope)
+	// we do not pass in configuration for backwards compatibility
+	doc, err := NewJsonDocument(pres.catalog, pres.srcMetadata, pres.distro, pres.scope, nil)
 	if err != nil {
 		return err
 	}

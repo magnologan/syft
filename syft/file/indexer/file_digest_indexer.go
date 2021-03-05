@@ -32,9 +32,7 @@ func init() {
 		crypto.SHA1,
 		crypto.SHA256,
 	} {
-		lower := strings.ToLower(h.String())
-		name := strings.Replace(lower, "-", "", -1)
-		supportedHashAlgorithms[name] = h
+		supportedHashAlgorithms[cleanAlgorithmName(h.String())] = h
 	}
 }
 
@@ -96,11 +94,16 @@ func (i *FileDigestsIndexer) index(location source.Location) ([]file.Digest, err
 		// file type but a body is still allowed.
 		for idx, hasher := range hashers {
 			result[idx] = file.Digest{
-				Algorithm: i.hashes[idx].String(),
+				Algorithm: cleanAlgorithmName(i.hashes[idx].String()),
 				Value:     fmt.Sprintf("%+x", hasher.Sum(nil)),
 			}
 		}
 	}
 
 	return result, nil
+}
+
+func cleanAlgorithmName(name string) string {
+	lower := strings.ToLower(name)
+	return strings.Replace(lower, "-", "", -1)
 }

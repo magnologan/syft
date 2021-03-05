@@ -177,7 +177,7 @@ func TestPackageSbomImport(t *testing.T) {
 	})
 
 	m := source.Metadata{
-		Scheme: "a-schema",
+		Scheme: source.ImageScheme,
 		ImageMetadata: source.ImageMetadata{
 			UserInput:      "user-in",
 			Layers:         nil,

@@ -162,7 +162,7 @@ func (r *directoryResolver) FileMetadataByLocation(location Location) (FileMetad
 		Mode: fi.Mode(),
 		Type: ty,
 		// unsupported across platforms
-		Uid: -1,
-		Gid: -1,
+		UserID:  -1,
+		GroupID: -1,
 	}, nil
 }

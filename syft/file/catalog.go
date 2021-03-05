@@ -1,6 +1,7 @@
 package file
 
 import (
+	"sort"
 	"sync"
 
 	"github.com/anchore/syft/syft/source"
@@ -62,5 +63,13 @@ func (c *Catalog) GetLocations(index string) []source.Location {
 		locations[idx] = l
 		idx++
 	}
+
+	sort.SliceStable(locations, func(i, j int) bool {
+		if locations[i].RealPath == locations[j].RealPath {
+			return locations[i].VirtualPath < locations[j].VirtualPath
+		}
+		return locations[i].RealPath < locations[j].RealPath
+	})
+
 	return locations
 }

@@ -3,12 +3,18 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/anchore/syft/syft/distro"
+	"github.com/anchore/syft/syft/pkg"
+
+	"github.com/anchore/syft/syft"
+
+	"github.com/anchore/syft/internal/presenter/poweruser"
+
 	"github.com/anchore/syft/syft/file/indexer"
 
 	"github.com/anchore/syft/internal/bus"
 	"github.com/anchore/syft/internal/config"
 	"github.com/anchore/syft/internal/log"
-	"github.com/anchore/syft/internal/presenter/packages"
 	"github.com/anchore/syft/internal/ui"
 	"github.com/anchore/syft/syft/event"
 	"github.com/anchore/syft/syft/file"
@@ -89,23 +95,35 @@ func powerUserExecWorker(userInput string) <-chan error {
 			return
 		}
 
-		//if powerUserConfig.PackagesCataloger.Enabled {
-		//	catalog, d, err := syft.CatalogPackages(src, powerUserConfig.PackagesCataloger.ScopeOpt)
-		//	if err != nil {
-		//		errs <- fmt.Errorf("failed to catalog input: %+v", err)
-		//		return
-		//	}
-		//}
+		var packageCatalog *pkg.Catalog
+		var theDistro *distro.Distro
+		if powerUserConfig.PackagesCataloger.Enabled {
+			packageCatalog, theDistro, err = syft.CatalogPackages(src, powerUserConfig.PackagesCataloger.ScopeOpt)
+			if err != nil {
+				errs <- fmt.Errorf("failed to catalog input: %+v", err)
+				return
+			}
+		}
 
-		_, err = runIndexers(*powerUserConfig, src)
+		fileCatalog, err := runIndexers(*powerUserConfig, src)
 		if err != nil {
 			errs <- err
 			return
 		}
 
+		analysisResults := poweruser.JsonDocumentConfig{
+			PackageCatalog:    packageCatalog,
+			FileCatalog:       fileCatalog,
+			Distro:            theDistro,
+			SourceMetadata:    src.Metadata,
+			Scope:             powerUserConfig.PackagesCataloger.ScopeOpt,
+			PowerUserConfig:   *powerUserConfig,
+			ApplicationConfig: *appConfig,
+		}
+
 		bus.Publish(partybus.Event{
 			Type:  event.PresenterReady,
-			Value: packages.Presenter(packages.JSONPresenterOption, packages.PresenterConfig{}),
+			Value: poweruser.NewJsonPresenter(analysisResults),
 		})
 	}()
 	return errs

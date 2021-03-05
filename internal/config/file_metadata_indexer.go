@@ -7,9 +7,9 @@ import (
 )
 
 type FileMetadataIndexer struct {
-	Enabled  bool         `yaml:"enabled" mapstructure:"enabled"`
-	Scope    string       `yaml:"scope" mapstructure:"scope"`
-	ScopeOpt source.Scope `yaml:"-"`
+	Enabled  bool         `yaml:"enabled" json:"enabled" mapstructure:"enabled"`
+	Scope    string       `yaml:"scope" json:"scope" mapstructure:"scope"`
+	ScopeOpt source.Scope `yaml:"-" json:"-"`
 }
 
 func (cfg *FileMetadataIndexer) build() error {

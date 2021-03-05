@@ -60,6 +60,7 @@
    }
   }
  ],
+ "artifactRelationships": [],
  "source": {
   "type": "directory",
   "target": "/some/path"
@@ -76,6 +77,5 @@
  "schema": {
   "version": "1.0.2",
   "url": "https://raw.githubusercontent.com/anchore/syft/main/schema/json/schema-1.0.2.json"
- },
- "artifactRelationships": []
+ }
 }
