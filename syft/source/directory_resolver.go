@@ -118,17 +118,51 @@ func (r *directoryResolver) RelativeFileByPath(_ Location, path string) *Locatio
 	return &paths[0]
 }
 
-// MultipleFileContentsByLocation returns the file contents for all file.References relative a directory.
-func (r directoryResolver) MultipleFileContentsByLocation(locations []Location) (map[Location]io.ReadCloser, error) {
-	refContents := make(map[Location]io.ReadCloser)
-	for _, location := range locations {
-		refContents[location] = file.NewDeferredReadCloser(location.RealPath)
-	}
-	return refContents, nil
-}
-
 // FileContentsByLocation fetches file contents for a single file reference relative to a directory.
 // If the path does not exist an error is returned.
 func (r directoryResolver) FileContentsByLocation(location Location) (io.ReadCloser, error) {
 	return file.NewDeferredReadCloser(location.RealPath), nil
+}
+
+func (r *directoryResolver) AllLocations() <-chan Location {
+	results := make(chan Location)
+	go func() {
+		defer close(results)
+		err := filepath.Walk(r.path,
+			func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					return err
+				}
+				results <- NewLocation(path)
+				return nil
+			})
+		if err != nil {
+			log.Errorf("unable to walk path=%q : %+v", r.path, err)
+		}
+	}()
+	return results
+}
+
+func (r *directoryResolver) FileMetadataByLocation(location Location) (FileMetadata, error) {
+	fi, err := os.Stat(location.RealPath)
+	if err != nil {
+		return FileMetadata{}, err
+	}
+
+	// best effort
+	ty := UnknownFileType
+	switch {
+	case fi.Mode().IsDir():
+		ty = Directory
+	case fi.Mode().IsRegular():
+		ty = RegularFile
+	}
+
+	return FileMetadata{
+		Mode: fi.Mode(),
+		Type: ty,
+		// unsupported across platforms
+		Uid: -1,
+		Gid: -1,
+	}, nil
 }

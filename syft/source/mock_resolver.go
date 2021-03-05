@@ -64,20 +64,6 @@ func (r MockResolver) FileContentsByLocation(location Location) (io.ReadCloser, 
 	return nil, fmt.Errorf("no file for location: %v", location)
 }
 
-// MultipleFileContentsByLocation returns the file contents for all specified Locations.
-func (r MockResolver) MultipleFileContentsByLocation(locations []Location) (map[Location]io.ReadCloser, error) {
-	results := make(map[Location]io.ReadCloser)
-	for _, l := range locations {
-		contents, err := r.FileContentsByLocation(l)
-		if err != nil {
-			return nil, err
-		}
-		results[l] = contents
-	}
-
-	return results, nil
-}
-
 // FilesByPath returns all Locations that match the given paths.
 func (r MockResolver) FilesByPath(paths ...string) ([]Location, error) {
 	var results []Location
@@ -118,4 +104,12 @@ func (r MockResolver) RelativeFileByPath(_ Location, path string) *Location {
 	}
 
 	return &paths[0]
+}
+
+func (r MockResolver) AllLocations() <-chan Location {
+	panic("not implemented")
+}
+
+func (r MockResolver) FileMetadataByLocation(Location) (FileMetadata, error) {
+	panic("not implemented")
 }

@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
-	"github.com/anchore/stereoscope/pkg/image"
+	"github.com/anchore/syft/syft/file/indexer"
+
 	"github.com/anchore/syft/internal/bus"
 	"github.com/anchore/syft/internal/config"
 	"github.com/anchore/syft/internal/log"
@@ -12,7 +12,6 @@ import (
 	"github.com/anchore/syft/internal/ui"
 	"github.com/anchore/syft/syft/event"
 	"github.com/anchore/syft/syft/file"
-	fileMetadata "github.com/anchore/syft/syft/file/indexer/metadata"
 	"github.com/anchore/syft/syft/source"
 	"github.com/gookit/color"
 	"github.com/pkg/profile"
@@ -53,10 +52,6 @@ var powerUserCmd = &cobra.Command{
 
 func init() {
 	powerUserCmd.Flags().StringVarP(&powerUserOpts.configPath, "config", "c", "", "config file path with all power-user options")
-	if err := powerUserCmd.MarkFlagRequired("config"); err != nil {
-		fmt.Printf("unable mark config flag as required: %+v", err)
-		os.Exit(1)
-	}
 
 	rootCmd.AddCommand(powerUserCmd)
 }
@@ -108,12 +103,6 @@ func powerUserExecWorker(userInput string) <-chan error {
 			return
 		}
 
-		//src, catalog, d, err := syft.Catalog(userInput, appConfig.ScopeOpt)
-		//if err != nil {
-		//	errs <- fmt.Errorf("failed to catalog input: %+v", err)
-		//	return
-		//}
-
 		bus.Publish(partybus.Event{
 			Type:  event.PresenterReady,
 			Value: packages.Presenter(packages.JSONPresenterOption, packages.PresenterConfig{}),
@@ -122,30 +111,38 @@ func powerUserExecWorker(userInput string) <-chan error {
 	return errs
 }
 
-func runIndexers(powerUserConfig config.PowerUser, theSource source.Source) (*file.Catalog, error) {
+func runIndexers(powerUserConfig config.PowerUser, src source.Source) (*file.Catalog, error) {
+	var indexers []file.Indexer
 	fileCatalog := file.NewCatalog()
 
-	fileMetadataConfig := powerUserConfig.FileMetadataIndexer
-	resolver, err := theSource.FileResolver(fileMetadataConfig.ScopeOpt)
-	if err != nil {
-		return nil, err
-	}
-	fileMetadataIndexerConfig := fileMetadata.IndexerConfig{
-		Resolver:       resolver,
-		HashAlgorithms: fileMetadataConfig.Digests,
-	}
-	fileMetadataIndexer, err := fileMetadata.NewIndexer(fileMetadataIndexerConfig, fileCatalog.NewIndexedCatalogEntryFactory(fileMetadata.Index))
-	if err != nil {
-		return nil, fmt.Errorf("unable to create fileMetadata indexer: %w", err)
+	if powerUserConfig.FileMetadataIndexer.Enabled {
+		resolver, err := src.FileResolver(powerUserConfig.FileMetadataIndexer.ScopeOpt)
+		if err != nil {
+			return nil, err
+		}
+		indexers = append(indexers, indexer.NewFileMetadataIndexer(resolver, fileCatalog))
 	}
 
-	indexers := []image.ContentObserver{
-		fileMetadataIndexer,
+	if powerUserConfig.FileDigestsIndexer.Enabled {
+		resolver, err := src.FileResolver(powerUserConfig.FileDigestsIndexer.ScopeOpt)
+		if err != nil {
+			return nil, err
+		}
+		fileDigestsConfig := indexer.FileDigestsIndexerConfig{
+			Resolver:       resolver,
+			HashAlgorithms: powerUserConfig.FileDigestsIndexer.Digests,
+		}
+		idxr, err := indexer.NewFileDigestsIndexer(fileDigestsConfig, fileCatalog)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create file digests indexer: %w", err)
+		}
+		indexers = append(indexers, idxr)
 	}
 
-	if err = file.Index(theSource.Image, indexers...); err != nil {
-		return nil, err
+	for _, i := range indexers {
+		if err := i.Index(); err != nil {
+			return nil, err
+		}
 	}
-
 	return fileCatalog, nil
 }

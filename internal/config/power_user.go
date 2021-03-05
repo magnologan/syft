@@ -13,6 +13,7 @@ type PowerUser struct {
 	ConfigPath          string              `yaml:"configPath"`
 	PackagesCataloger   PackageCataloger    `yaml:"packageCataloger" mapstructure:"packageCataloger"`
 	FileMetadataIndexer FileMetadataIndexer `yaml:"fileMetadataIndexer" mapstructure:"fileMetadataIndexer"`
+	FileDigestsIndexer  FileDigestsIndexer  `yaml:"fileDigestsIndexer" mapstructure:"fileDigestsIndexer"`
 }
 
 // LoadPowerUserConfig populates the given viper object with PowerUser configuration  on disk
@@ -26,9 +27,11 @@ func LoadPowerUserConfig(v *viper.Viper, configPath string, appConfig Applicatio
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 
 	// use explicitly the given user config
-	v.SetConfigFile(configPath)
-	if err := v.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("unable to read power-user config=%q : %w", configPath, err)
+	if configPath != "" {
+		v.SetConfigFile(configPath)
+		if err := v.ReadInConfig(); err != nil {
+			return nil, fmt.Errorf("unable to read power-user config=%q : %w", configPath, err)
+		}
 	}
 
 	config := &PowerUser{}
@@ -46,9 +49,17 @@ func LoadPowerUserConfig(v *viper.Viper, configPath string, appConfig Applicatio
 
 // build inflates simple config values into native objects after the config is fully read in.
 func (cfg *PowerUser) build() error {
-	if err := cfg.FileMetadataIndexer.build(); err != nil {
-		return err
+	builders := []func() error{
+		cfg.FileMetadataIndexer.build,
+		cfg.FileDigestsIndexer.build,
+		cfg.PackagesCataloger.build,
 	}
+	for _, builder := range builders {
+		if err := builder(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -64,7 +75,14 @@ func (cfg PowerUser) String() string {
 func setDefaultPowerUserConfigValues(v *viper.Viper, appConfig Application) {
 	// set file metadata default options
 	v.SetDefault("fileMetadataIndexer.enabled", true)
-	//v.SetDefault("fileMetadata.files", []string{"**"}) // TODO: an empty list should mean all files, yes? helps on performance
-	v.SetDefault("fileMetadataIndexer.scope", appConfig.Scope)
-	v.SetDefault("fileMetadataIndexer.digests", []string{"sha256"})
+	v.SetDefault("fileMetadataIndexer.scope", appConfig.ScopeOpt)
+
+	// set file digests default options
+	v.SetDefault("fileDigestsIndexer.enabled", true)
+	v.SetDefault("fileDigestsIndexer.scope", appConfig.ScopeOpt)
+	v.SetDefault("fileDigestsIndexer.digests", []string{"sha256"})
+
+	// set packages default options
+	v.SetDefault("packageCataloger.enabled", true)
+	v.SetDefault("packageCataloger.scope", appConfig.ScopeOpt)
 }

@@ -9,13 +9,16 @@ type FileResolver interface {
 	FileContentResolver
 	FilePathResolver
 	FileLocationResolver
+	FileMetadataResolver
 }
 
-// FileContentResolver knows how to get file content for given file.References
+// FileContentResolver knows how to get file content for a given Location
 type FileContentResolver interface {
 	FileContentsByLocation(Location) (io.ReadCloser, error)
-	// TODO: it is possible to be given duplicate locations that will be overridden in the map (key), a subtle problem that coule easily be misued.
-	MultipleFileContentsByLocation([]Location) (map[Location]io.ReadCloser, error)
+}
+
+type FileMetadataResolver interface {
+	FileMetadataByLocation(Location) (FileMetadata, error)
 }
 
 // FilePathResolver knows how to get a Location for given string paths and globs
@@ -33,4 +36,5 @@ type FilePathResolver interface {
 
 type FileLocationResolver interface {
 	HasLocation(Location) bool
+	AllLocations() <-chan Location
 }

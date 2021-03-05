@@ -146,14 +146,23 @@ func (r *imageSquashResolver) RelativeFileByPath(_ Location, path string) *Locat
 	return &paths[0]
 }
 
-// MultipleFileContentsByLocation returns the file contents for all file.References relative to the image. Note that a
-// file.Reference is a path relative to a particular layer, in this case only from the squashed representation.
-func (r *imageSquashResolver) MultipleFileContentsByLocation(locations []Location) (map[Location]io.ReadCloser, error) {
-	return mapLocationRefs(r.img.MultipleFileContentsByRef, locations)
-}
-
 // FileContentsByLocation fetches file contents for a single file reference, irregardless of the source layer.
 // If the path does not exist an error is returned.
 func (r *imageSquashResolver) FileContentsByLocation(location Location) (io.ReadCloser, error) {
 	return r.img.FileContentsByRef(location.ref)
+}
+
+func (r *imageSquashResolver) AllLocations() <-chan Location {
+	results := make(chan Location)
+	go func() {
+		defer close(results)
+		for _, ref := range r.img.SquashedTree().AllFiles() {
+			results <- NewLocationFromImage(string(ref.RealPath), ref, r.img)
+		}
+	}()
+	return results
+}
+
+func (r *imageSquashResolver) FileMetadataByLocation(location Location) (FileMetadata, error) {
+	return fileMetadataByLocation(r.img, location)
 }
