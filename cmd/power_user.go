@@ -3,26 +3,13 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/anchore/syft/syft/distro"
-	"github.com/anchore/syft/syft/pkg"
-
-	"github.com/anchore/syft/syft"
-
-	"github.com/anchore/syft/internal/presenter/poweruser"
-
-	"github.com/anchore/syft/syft/file/indexer"
-
 	"github.com/anchore/syft/internal/bus"
-	"github.com/anchore/syft/internal/config"
-	"github.com/anchore/syft/internal/log"
+	"github.com/anchore/syft/internal/presenter/poweruser"
 	"github.com/anchore/syft/internal/ui"
 	"github.com/anchore/syft/syft/event"
-	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/source"
-	"github.com/gookit/color"
 	"github.com/pkg/profile"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"github.com/wagoodman/go-partybus"
 )
 
@@ -73,14 +60,6 @@ func powerUserExecWorker(userInput string) <-chan error {
 	go func() {
 		defer close(errs)
 
-		powerUserConfig, err := config.LoadPowerUserConfig(viper.New(), powerUserOpts.configPath, *appConfig)
-		if err != nil {
-			errs <- err
-			return
-		}
-
-		log.Debugf("power-user config:\n%s", color.Magenta.Sprint(powerUserConfig.String()))
-
 		checkForApplicationUpdate()
 
 		src, cleanup, err := source.New(userInput)
@@ -95,30 +74,21 @@ func powerUserExecWorker(userInput string) <-chan error {
 			return
 		}
 
-		var packageCatalog *pkg.Catalog
-		var theDistro *distro.Distro
-		if powerUserConfig.PackagesCataloger.Enabled {
-			packageCatalog, theDistro, err = syft.CatalogPackages(src, powerUserConfig.PackagesCataloger.ScopeOpt)
-			if err != nil {
-				errs <- fmt.Errorf("failed to catalog input: %+v", err)
-				return
-			}
+		analysisResults := poweruser.JsonDocumentConfig{
+			SourceMetadata:    src.Metadata,
+			ApplicationConfig: *appConfig,
 		}
-
-		fileCatalog, err := runIndexers(*powerUserConfig, src)
+		tasks, err := powerUserTasks(src)
 		if err != nil {
 			errs <- err
 			return
 		}
 
-		analysisResults := poweruser.JsonDocumentConfig{
-			PackageCatalog:    packageCatalog,
-			FileCatalog:       fileCatalog,
-			Distro:            theDistro,
-			SourceMetadata:    src.Metadata,
-			Scope:             powerUserConfig.PackagesCataloger.ScopeOpt,
-			PowerUserConfig:   *powerUserConfig,
-			ApplicationConfig: *appConfig,
+		for _, task := range tasks {
+			if err = task(&analysisResults); err != nil {
+				errs <- err
+				return
+			}
 		}
 
 		bus.Publish(partybus.Event{
@@ -127,40 +97,4 @@ func powerUserExecWorker(userInput string) <-chan error {
 		})
 	}()
 	return errs
-}
-
-func runIndexers(powerUserConfig config.PowerUser, src source.Source) (*file.Catalog, error) {
-	var indexers []file.Indexer
-	fileCatalog := file.NewCatalog()
-
-	if powerUserConfig.FileMetadataIndexer.Enabled {
-		resolver, err := src.FileResolver(powerUserConfig.FileMetadataIndexer.ScopeOpt)
-		if err != nil {
-			return nil, err
-		}
-		indexers = append(indexers, indexer.NewFileMetadataIndexer(resolver, fileCatalog))
-	}
-
-	if powerUserConfig.FileDigestsIndexer.Enabled {
-		resolver, err := src.FileResolver(powerUserConfig.FileDigestsIndexer.ScopeOpt)
-		if err != nil {
-			return nil, err
-		}
-		fileDigestsConfig := indexer.FileDigestsIndexerConfig{
-			Resolver:       resolver,
-			HashAlgorithms: powerUserConfig.FileDigestsIndexer.Digests,
-		}
-		idxr, err := indexer.NewFileDigestsIndexer(fileDigestsConfig, fileCatalog)
-		if err != nil {
-			return nil, fmt.Errorf("unable to create file digests indexer: %w", err)
-		}
-		indexers = append(indexers, idxr)
-	}
-
-	for _, i := range indexers {
-		if err := i.Index(); err != nil {
-			return nil, err
-		}
-	}
-	return fileCatalog, nil
 }

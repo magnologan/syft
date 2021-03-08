@@ -91,7 +91,7 @@ func setSourceOptions(flags *pflag.FlagSet) {
 	flags.StringP(
 		"scope", "s", source.SquashedScope.String(),
 		fmt.Sprintf("selection of layers to catalog, options=%v", source.AllScopes))
-	if err := viper.BindPFlag(flag, flags.Lookup(flag)); err != nil {
+	if err := viper.BindPFlag("packages.scope", flags.Lookup(flag)); err != nil {
 		fmt.Printf("unable to bind flag '%s': %+v", flag, err)
 		os.Exit(1)
 	}
@@ -182,14 +182,14 @@ func packagesExecWorker(userInput string) <-chan error {
 		}
 		defer cleanup()
 
-		catalog, d, err := syft.CatalogPackages(src, appConfig.ScopeOpt)
+		catalog, d, err := syft.CatalogPackages(src, appConfig.Packages.ScopeOpt)
 		if err != nil {
 			errs <- fmt.Errorf("failed to catalog input: %+v", err)
 			return
 		}
 
 		if appConfig.Anchore.UploadEnabled {
-			if err := runPackageSbomUpload(src, src.Metadata, catalog, d, appConfig.ScopeOpt); err != nil {
+			if err := runPackageSbomUpload(src, src.Metadata, catalog, d, appConfig.Packages.ScopeOpt); err != nil {
 				errs <- err
 				return
 			}
@@ -201,7 +201,7 @@ func packagesExecWorker(userInput string) <-chan error {
 				SourceMetadata: src.Metadata,
 				Catalog:        catalog,
 				Distro:         d,
-				Scope:          appConfig.ScopeOpt,
+				Scope:          appConfig.Packages.ScopeOpt,
 			}),
 		})
 	}()

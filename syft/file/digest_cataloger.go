@@ -1,4 +1,4 @@
-package indexer
+package file
 
 import (
 	"crypto"
@@ -7,23 +7,14 @@ import (
 	"io"
 	"strings"
 
-	"github.com/anchore/syft/syft/file"
 	"github.com/anchore/syft/syft/source"
 )
 
-const FileDigestsIndex = "fileDigests"
-
 var supportedHashAlgorithms = make(map[string]crypto.Hash)
 
-type FileDigestsIndexerConfig struct {
-	Resolver       source.FileResolver
-	HashAlgorithms []string
-}
-
-type FileDigestsIndexer struct {
-	config  FileDigestsIndexerConfig
-	catalog file.IndexCataloger
-	hashes  []crypto.Hash
+type DigestsCataloger struct {
+	resolver source.FileResolver
+	hashes   []crypto.Hash
 }
 
 func init() {
@@ -36,38 +27,37 @@ func init() {
 	}
 }
 
-func NewFileDigestsIndexer(config FileDigestsIndexerConfig, catalog *file.Catalog) (*FileDigestsIndexer, error) {
-	indexer := &FileDigestsIndexer{
-		config:  config,
-		catalog: catalog.NewIndexedCatalogEntryFactory(FileDigestsIndex),
-	}
-
-	for _, hashStr := range config.HashAlgorithms {
-		lowerHashStr := strings.ToLower(hashStr)
-		hashObj, ok := supportedHashAlgorithms[lowerHashStr]
+func NewDigestsCataloger(resolver source.FileResolver, hashAlgorithms []string) (*DigestsCataloger, error) {
+	var hashes []crypto.Hash
+	for _, hashStr := range hashAlgorithms {
+		name := cleanAlgorithmName(hashStr)
+		hashObj, ok := supportedHashAlgorithms[name]
 		if !ok {
 			return nil, fmt.Errorf("unsupported hash algorithm: %s", hashStr)
 		}
-		indexer.hashes = append(indexer.hashes, hashObj)
+		hashes = append(hashes, hashObj)
 	}
 
-	return indexer, nil
+	return &DigestsCataloger{
+		resolver: resolver,
+		hashes:   hashes,
+	}, nil
 }
 
-func (i *FileDigestsIndexer) Index() error {
-	for location := range i.config.Resolver.AllLocations() {
-		result, err := i.index(location)
+func (i *DigestsCataloger) Catalog() (map[source.Location][]Digest, error) {
+	results := make(map[source.Location][]Digest)
+	for location := range i.resolver.AllLocations() {
+		result, err := i.catalogLocation(location)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-
-		i.catalog(location, result)
+		results[location] = result
 	}
-	return nil
+	return results, nil
 }
 
-func (i *FileDigestsIndexer) index(location source.Location) ([]file.Digest, error) {
-	contentReader, err := i.config.Resolver.FileContentsByLocation(location)
+func (i *DigestsCataloger) catalogLocation(location source.Location) ([]Digest, error) {
+	contentReader, err := i.resolver.FileContentsByLocation(location)
 	if err != nil {
 		return nil, err
 	}
@@ -86,14 +76,13 @@ func (i *FileDigestsIndexer) index(location source.Location) ([]file.Digest, err
 		return nil, fmt.Errorf("unable to observe contents of %+v: %+v", location.RealPath, err)
 	}
 
-	var result = make([]file.Digest, len(i.hashes))
-
+	result := make([]Digest, len(i.hashes))
 	if size > 0 {
 		// only capture digests when there is content. It is important to do this based on SIZE and not
 		// FILE TYPE. The reasoning is that it is possible for a tar to be crafted with a header-only
 		// file type but a body is still allowed.
 		for idx, hasher := range hashers {
-			result[idx] = file.Digest{
+			result[idx] = Digest{
 				Algorithm: cleanAlgorithmName(i.hashes[idx].String()),
 				Value:     fmt.Sprintf("%+x", hasher.Sum(nil)),
 			}

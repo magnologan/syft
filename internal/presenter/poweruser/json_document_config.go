@@ -9,11 +9,10 @@ import (
 )
 
 type JsonDocumentConfig struct {
-	PowerUserConfig   config.PowerUser
 	ApplicationConfig config.Application
 	PackageCatalog    *pkg.Catalog
-	FileCatalog       *file.Catalog
+	FileMetadata      map[source.Location]source.FileMetadata
+	FileDigests       map[source.Location][]file.Digest
 	Distro            *distro.Distro
 	SourceMetadata    source.Metadata
-	Scope             source.Scope
 }

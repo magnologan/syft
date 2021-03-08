@@ -5,10 +5,11 @@ import (
 	"path"
 	"strings"
 
+	"github.com/anchore/syft/syft/source"
+
 	"github.com/adrg/xdg"
 	"github.com/anchore/syft/internal"
 	"github.com/anchore/syft/internal/presenter/packages"
-	"github.com/anchore/syft/syft/source"
 	"github.com/mitchellh/go-homedir"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
@@ -20,46 +21,15 @@ type Application struct {
 	ConfigPath        string                   `yaml:",omitempty" json:"configPath"`               // the location where the application config was read from (either from -c or discovered while loading)
 	PresenterOpt      packages.PresenterOption `yaml:"-" json:"-"`                                 // -o, the native Presenter.PresenterOption to use for report formatting
 	Output            string                   `yaml:"output" json:"output" mapstructure:"output"` // -o, the Presenter hint string to use for report formatting
-	ScopeOpt          source.Scope             `yaml:"-" json:"-"`                                 // -s, the native source.Scope option to use for how to catalog the container image
-	Scope             string                   `yaml:"scope" json:"scope" mapstructure:"scope"`    // -s, the source.Scope string hint for how to catalog the container image
 	Quiet             bool                     `yaml:"quiet" json:"quiet" mapstructure:"quiet"`    // -q, indicates to not show any status output to stderr (ETUI or logging UI)
 	Log               logging                  `yaml:"log" json:"log" mapstructure:"log"`          // all logging-related options
 	CliOptions        CliOnlyOptions           `yaml:"-" json:"-"`                                 // all options only available through the CLI (not via env vars or config)
 	Dev               Development              `yaml:"dev" json:"dev" mapstructure:"dev"`
 	CheckForAppUpdate bool                     `yaml:"check-for-app-update" json:"check-for-app-update" mapstructure:"check-for-app-update"` // whether to check for an application update on start up or not
 	Anchore           anchore                  `yaml:"anchore" json:"anchore" mapstructure:"anchore"`                                        // options for interacting with Anchore Engine/Enterprise
-}
-
-// CliOnlyOptions are options that are in the application config in memory, but are only exposed via CLI switches (not from unmarshaling a config file)
-type CliOnlyOptions struct {
-	ConfigPath string // -c. where the read config is on disk
-	Verbosity  int    // -v or -vv , controlling which UI (ETUI vs logging) and what the log level should be
-}
-
-// logging contains all logging-related configuration options available to the user via the application config.
-type logging struct {
-	Structured   bool         `yaml:"structured" json:"structured" mapstructure:"structured"` // show all log entries as JSON formatted strings
-	LevelOpt     logrus.Level `yaml:"-" json:"-"`                                             // the native log level object used by the logger
-	Level        string       `yaml:"level" json:"level" mapstructure:"level"`                // the log level string hint
-	FileLocation string       `yaml:"file" json:"file-location" mapstructure:"file"`          // the file path to write logs to
-}
-
-type anchore struct {
-	// upload options
-	UploadEnabled bool   `yaml:"upload-enabled" json:"upload-enabled" mapstructure:"upload-enabled"` // whether to upload results to Anchore Engine/Enterprise (defaults to "false" unless there is the presence of -h CLI option)
-	Host          string `yaml:"host" json:"host" mapstructure:"host"`                               // -H , hostname of the engine/enterprise instance to upload to
-	Path          string `yaml:"path" json:"path" mapstructure:"path"`                               // override the engine/enterprise API upload path
-	// IMPORTANT: do not show the username in any YAML/JSON output (sensitive information)
-	Username string `yaml:"-" json:"-" mapstructure:"username"` // -u , username to authenticate upload
-	// IMPORTANT: do not show the password in any YAML/JSON output (sensitive information)
-	Password               string `yaml:"-" json:"-" mapstructure:"password"`                                                               // -p , password to authenticate upload
-	Dockerfile             string `yaml:"dockerfile" json:"dockerfile" mapstructure:"dockerfile"`                                           // -d , dockerfile to attach for upload
-	OverwriteExistingImage bool   `yaml:"overwrite-existing-image" json:"overwrite-existing-image" mapstructure:"overwrite-existing-image"` // --overwrite-existing-image , if any of the SBOM components have already been uploaded this flag will ensure they are overwritten with the current upload
-}
-
-type Development struct {
-	ProfileCPU bool `yaml:"profile-cpu" json:"profile-cpu" mapstructure:"profile-cpu"`
-	ProfileMem bool `yaml:"profile-mem" json:"profile-mem" mapstructure:"profile-mem"`
+	Packages          Packages                 `yaml:"packages" json:"packages" mapstructure:"packages"`
+	FileMetadata      FileMetadata             `yaml:"file-metadata" json:"file-metadata" mapstructure:"file-metadata"`
+	FileDigest        FileDigest               `yaml:"file-digest" json:"file-digest" mapstructure:"file-digest"`
 }
 
 // LoadApplicationConfig populates the given viper object with application configuration discovered on disk
@@ -92,13 +62,6 @@ func (cfg *Application) build(v *viper.Viper, wasHostnameSet bool) error {
 		return fmt.Errorf("bad --output value '%s'", cfg.Output)
 	}
 	cfg.PresenterOpt = presenterOption
-
-	// set the source scope
-	scopeOption := source.ParseScope(cfg.Scope)
-	if scopeOption == source.UnknownScope {
-		return fmt.Errorf("bad --scope value '%s'", cfg.Scope)
-	}
-	cfg.ScopeOpt = scopeOption
 
 	if cfg.Quiet {
 		// TODO: this is bad: quiet option trumps all other logging options
@@ -137,6 +100,16 @@ func (cfg *Application) build(v *viper.Viper, wasHostnameSet bool) error {
 
 	if !cfg.Anchore.UploadEnabled && cfg.Anchore.Dockerfile != "" {
 		return fmt.Errorf("cannot provide dockerfile option without enabling upload")
+	}
+
+	for _, builder := range []func() error{
+		cfg.Packages.build,
+		cfg.FileMetadata.build,
+		cfg.FileDigest.build,
+	} {
+		if err := builder(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -218,4 +191,12 @@ func setNonCliDefaultAppConfigValues(v *viper.Viper) {
 	v.SetDefault("check-for-app-update", true)
 	v.SetDefault("dev.profile-cpu", false)
 	v.SetDefault("dev.profile-mem", false)
+
+	defaultScope := source.SquashedScope
+	v.SetDefault("packages.cataloging-enabled", true)
+	v.SetDefault("file-metadata.cataloging-enabled", true)
+	v.SetDefault("file-metadata.scope", defaultScope)
+	v.SetDefault("file-digest.cataloging-enabled", true)
+	v.SetDefault("file-digest.scope", defaultScope)
+	v.SetDefault("file-digest.algorithms", []string{"sha256"})
 }

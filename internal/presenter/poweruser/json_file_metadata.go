@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/anchore/syft/syft/file"
-	"github.com/anchore/syft/syft/file/indexer"
 	"github.com/anchore/syft/syft/source"
 )
 
@@ -21,25 +19,13 @@ type JsonFileMetadataEntry struct {
 	GroupID int             `json:"groupID"`
 }
 
-func NewJsonFileMetadata(fileCatalog *file.Catalog) ([]JsonFileMetadata, error) {
-	index := indexer.FileMetadataIndex
+func NewJsonFileMetadata(data map[source.Location]source.FileMetadata) ([]JsonFileMetadata, error) {
 	results := make([]JsonFileMetadata, 0)
-	for _, location := range fileCatalog.GetLocations(index) {
-		allMetadata := fileCatalog.GetMetadata(index, location)
-		if len(allMetadata) > 1 {
-			return nil, fmt.Errorf("discovered multiple metadata in file catalog @ index=%q location=%+v", index, location)
-		} else if len(allMetadata) == 0 {
-			continue
-		}
-
-		metadata, ok := allMetadata[0].(source.FileMetadata)
-		if !ok {
-			return nil, fmt.Errorf("unexptected type found in file catalog @ index=%q location=%+v", index, location)
-		}
+	for location, metadata := range data {
 
 		mode, err := strconv.Atoi(fmt.Sprintf("%o", metadata.Mode))
 		if err != nil {
-			return nil, fmt.Errorf("invalid mode found in file catalog @ index=%q location=%+v mode=%q: %w", index, location, metadata.Mode, err)
+			return nil, fmt.Errorf("invalid mode found in file catalog @ location=%+v mode=%q: %w", location, metadata.Mode, err)
 		}
 
 		results = append(results, JsonFileMetadata{
