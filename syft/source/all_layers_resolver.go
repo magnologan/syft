@@ -17,20 +17,12 @@ var _ FileResolver = (*allLayersResolver)(nil)
 type allLayersResolver struct {
 	img    *image.Image
 	layers []int
-	refs   file.ReferenceSet
 }
 
 // newAllLayersResolver returns a new resolver from the perspective of all image layers for the given image.
 func newAllLayersResolver(img *image.Image) (*allLayersResolver, error) {
 	if len(img.Layers) == 0 {
 		return nil, fmt.Errorf("the image does not contain any layers")
-	}
-
-	refs := file.NewFileReferenceSet()
-	for _, l := range img.Layers {
-		for _, r := range l.Tree.AllFiles() {
-			refs.Add(r)
-		}
 	}
 
 	var layers = make([]int, 0)
@@ -40,7 +32,6 @@ func newAllLayersResolver(img *image.Image) (*allLayersResolver, error) {
 	return &allLayersResolver{
 		img:    img,
 		layers: layers,
-		refs:   refs,
 	}, nil
 }
 
@@ -54,13 +45,6 @@ func (r *allLayersResolver) HasPath(path string) bool {
 		}
 	}
 	return false
-}
-
-func (r *allLayersResolver) HasLocation(l Location) bool {
-	if l.ref.ID() == 0 {
-		return false
-	}
-	return r.refs.Contains(l.ref)
 }
 
 func (r *allLayersResolver) fileByRef(ref file.Reference, uniqueFileIDs file.ReferenceSet, layerIdx int) ([]file.Reference, error) {

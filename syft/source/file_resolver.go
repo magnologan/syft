@@ -35,6 +35,5 @@ type FilePathResolver interface {
 }
 
 type FileLocationResolver interface {
-	HasLocation(Location) bool
 	AllLocations() <-chan Location
 }

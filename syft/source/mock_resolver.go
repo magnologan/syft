@@ -38,15 +38,6 @@ func (r MockResolver) HasPath(path string) bool {
 	return false
 }
 
-func (r MockResolver) HasLocation(l Location) bool {
-	for _, loc := range r.Locations {
-		if l.ref.ID() == loc.ref.ID() {
-			return true
-		}
-	}
-	return false
-}
-
 // String returns the string representation of the MockResolver.
 func (r MockResolver) String() string {
 	return fmt.Sprintf("mock:(%s,...)", r.Locations[0].RealPath)

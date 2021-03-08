@@ -38,14 +38,6 @@ func (r *directoryResolver) HasPath(userPath string) bool {
 	return !os.IsNotExist(err)
 }
 
-func (r *directoryResolver) HasLocation(l Location) bool {
-	locations, err := r.FilesByPath(l.RealPath)
-	if err != nil {
-		return false
-	}
-	return len(locations) > 0
-}
-
 // Stringer to represent a directory path data source
 func (r directoryResolver) String() string {
 	return fmt.Sprintf("dir:%s", r.path)

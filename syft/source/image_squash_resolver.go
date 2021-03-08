@@ -13,8 +13,7 @@ var _ FileResolver = (*imageSquashResolver)(nil)
 
 // imageSquashResolver implements path and content access for the Squashed source option for container image data sources.
 type imageSquashResolver struct {
-	img  *image.Image
-	refs file.ReferenceSet
+	img *image.Image
 }
 
 // newImageSquashResolver returns a new resolver from the perspective of the squashed representation for the given image.
@@ -23,22 +22,9 @@ func newImageSquashResolver(img *image.Image) (*imageSquashResolver, error) {
 		return nil, fmt.Errorf("the image does not have have a squashed tree")
 	}
 
-	refs := file.NewFileReferenceSet()
-	for _, r := range img.SquashedTree().AllFiles() {
-		refs.Add(r)
-	}
-
 	return &imageSquashResolver{
-		img:  img,
-		refs: refs,
+		img: img,
 	}, nil
-}
-
-func (r *imageSquashResolver) HasLocation(l Location) bool {
-	if l.ref.ID() == 0 {
-		return false
-	}
-	return r.refs.Contains(l.ref)
 }
 
 // HasPath indicates if the given path exists in the underlying source.
