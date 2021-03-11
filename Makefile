@@ -34,6 +34,16 @@ endif
 # used to generate the changelog from the second to last tag to the current tag (used in the release pipeline when the release tag is in place)
 LAST_TAG := $(shell git describe --abbrev=0 --tags $(shell git rev-list --tags --max-count=1))
 SECOND_TO_LAST_TAG := $(shell git describe --abbrev=0 --tags $(shell git rev-list --tags --skip=1 --max-count=1))
+major = $(shell echo "$(1)" | cut -d '.' -f 1)
+minor = $(shell echo "$(1)" | cut -d '.' -f 2)
+patch = $(shell echo "$(1)" | cut -d '.' -f 3)
+
+CONTAINER_IMAGE_REPOSITORY := "anchore/$(BIN)"
+CONTAINER_IMAGE_TAG_MAJOR := "$(CONTAINER_IMAGE_REPOSITORY):$(call major,$(VERSION))"
+CONTAINER_IMAGE_TAG_MINOR := "$(CONTAINER_IMAGE_REPOSITORY):$(call major,$(VERSION)).$(call minor,$(VERSION))"
+CONTAINER_IMAGE_TAG_PATCH := "$(CONTAINER_IMAGE_REPOSITORY):$(call major,$(VERSION)).$(call minor,$(VERSION)).$(call patch,$(VERSION))"
+CONTAINER_IMAGE_TAG_LATEST := "$(CONTAINER_IMAGE_REPOSITORY):latest"
+
 
 ## Variable assertions
 
@@ -78,7 +88,7 @@ help:
 ci-bootstrap:
 	DEBIAN_FRONTEND=noninteractive sudo apt update && sudo -E apt install -y bc jq libxml2-utils
 
-.PHONY:
+.PHONY: ci-bootstrap-mac
 ci-bootstrap-mac:
 	github_changelog_generator --version || sudo gem install github_changelog_generator
 
@@ -262,8 +272,8 @@ changelog-unreleased: ## show the current changelog that will be produced on the
 release: clean-dist ci-bootstrap-mac changelog-release ## Build and publish final binaries and packages. Intended to be run only on macOS.
 	$(call title,Publishing release artifacts)
 
-	# Prepare for macOS-specific signing process
-	.github/scripts/mac-prepare-for-signing.sh
+#	 Prepare for macOS-specific signing process
+#	.github/scripts/mac-prepare-for-signing.sh
 
 	# create a config with the dist dir overridden
 	echo "dist: $(DISTDIR)" > $(TEMPDIR)/goreleaser.yaml
@@ -275,14 +285,47 @@ release: clean-dist ci-bootstrap-mac changelog-release ## Build and publish fina
 		VERSION=$(VERSION:v%=%) \
 		$(TEMPDIR)/goreleaser \
 			--rm-dist \
+			--skip-publish \
+			--skip-validate \
 			--config $(TEMPDIR)/goreleaser.yaml \
 			--release-notes <(cat CHANGELOG.md)"
 
-	# verify checksum signatures
-	.github/scripts/verify-signature.sh "$(DISTDIR)"
+#	# verify checksum signatures
+#	.github/scripts/verify-signature.sh "$(DISTDIR)"
 
-	# upload the version file that supports the application version update check (excluding pre-releases)
-	.github/scripts/update-version-file.sh "$(DISTDIR)" "$(VERSION)"
+#	# upload the version file that supports the application version update check (excluding pre-releases)
+#	.github/scripts/update-version-file.sh "$(DISTDIR)" "$(VERSION)"
+
+
+.PHONY: container-image-build
+container-image-build:
+	$(call title,Building and tagging container image for $(BIN))
+	tags=( \
+		"-t $(CONTAINER_IMAGE_TAG_MAJOR)" \
+		"-t $(CONTAINER_IMAGE_TAG_MINOR)" \
+		"-t $(CONTAINER_IMAGE_TAG_PATCH)" \
+		"-t $(CONTAINER_IMAGE_TAG_LATEST)" \
+	) && \
+	DOCKER_BUILDKIT=1 docker build --no-cache $${tags[@]} -f "./Dockerfile" .
+
+.PHONY: container-image-test
+container-image-smoke-test:
+	$(call title,Smoke testing container image)
+	docker run --pull never --rm "$(CONTAINER_IMAGE_TAG_LATEST)" version
+
+.PHONY: container-image-push
+container-image-push:
+	$(call title,Pushing container image tags)
+
+	tags=( \
+		"$(CONTAINER_IMAGE_TAG_MAJOR)" \
+		"$(CONTAINER_IMAGE_TAG_MINOR)" \
+		"$(CONTAINER_IMAGE_TAG_PATCH)" \
+		"$(CONTAINER_IMAGE_TAG_LATEST)" \
+	) && \
+    for tag in $${tags[@]}; do \
+		docker push "$${tag}"; \
+    done
 
 .PHONY: clean
 clean: clean-dist clean-snapshot ## Remove previous builds and result reports
